@@ -67,9 +67,18 @@ to those of CL-HSIs, making diffusion-based prior learning tractable.
 
 ---
 
-## Abstract
+## Why MLP-KAN?
 
-Hyperspectral imaging suffers from degradation due to atmospheric disturbances, diffusion effects, and surface reflectance variations. To address this, we propose **SMLP-KAN** (Spectral MLP-KAN Diffusion Prior), an unsupervised framework that combines spectral diffusion priors with function learning and attention-driven feature refinement. It consists of three components: an **MLP-KAN Feature Extractor** for hierarchical abstraction and explicit function modeling, a **Spectral Diffusion Prior Module** to encode the stochastic evolution from degraded to clean spectra, and an **Attentive Function Learning Mechanism** to refine high-confidence features and suppress redundancies. Without labeled data, SMLP-KAN fuses degraded hyperspectral signals with spatial priors, enhancing spectral fidelity and spatial resolution. Experiments on real-world datasets show it outperforms state-of-the-art methods in **sharpening**, **denoising**, and **inpainting**.
+<div align="center">
+<img src="fig/psnr_bar.png" width="900"/>
+<br>
+<em>
+PSNR comparison of pure MLP, pure KAN, and MLP-KAN (PSAB + CAAB) on four benchmark datasets
+for ×4 hyperspectral sharpening. MLP focuses on representation learning;
+KAN emphasises function approximation. MLP-KAN unifies both,
+achieving consistently higher PSNR across all datasets.
+</em>
+</div>
 
 ---
 
@@ -87,37 +96,6 @@ and feature reconstruction (FRB).
 
 <br>
 
-**Three-stage per-spectral-vector pipeline:**
-
-```
-DG-HSI spectral vector  x_s  ∈ R^S
-         │
-         ▼
- ┌──────────────────────────────────┐
- │  Stage 1 — MLP Block (MLPB)     │
- │  F_s = Linear(SiLU(Linear(x_s)))│
- └──────────────┬───────────────────┘
-                │
-                ▼
- ┌──────────────────────────────────┐
- │  Stage 2 — RHAG  (× K layers)   │
- │  F_n = LayerNorm(F_s)            │
- │  ┌──────────┐   ┌─────────────┐  │
- │  │  PSAB    │   │    CAAB     │  │
- │  │ (spline) │   │  (k-means)  │  │
- │  └────┬─────┘   └──────┬──────┘  │
- │       └── F_d = F_p + F_c ───────┘
- └──────────────┬───────────────────┘
-                │
-                ▼
- ┌──────────────────────────────────┐
- │  Stage 3 — FRB                  │
- │  ε_θ = Dropout(LayerNorm(F_d))  │
- └──────────────────────────────────┘
-                │
-                ▼
-         CL-HSI output  x_t  ∈ R^S
-```
 
 | Component | Role | Key Formula |
 |---|---|---|
@@ -125,6 +103,7 @@ DG-HSI spectral vector  x_s  ∈ R^S
 | **PSAB** | Spline-based spectral smoothing + attention | `φ(F_n) = 1−tanh²((F_n−g)/d)` → `F_p = softmax(Linear(F_y))·F_y` |
 | **CAAB** | Cluster-based dominant feature selection | `F_c = k-means(LayerNorm(F_n))`, fixed k=2 |
 | **FRB** | Reconstruction and regularisation | `ε_θ = Dropout(LayerNorm(F_d))` |
+
 
 ### Attentive KAN (RHAG)
 
@@ -154,20 +133,6 @@ and the spatial fidelity term (HR-PCI).
 
 ---
 
-## Why MLP-KAN?
-
-<div align="center">
-<img src="fig/psnr_bar.png" width="900"/>
-<br>
-<em>
-PSNR comparison of pure MLP, pure KAN, and MLP-KAN (PSAB + CAAB) on four benchmark datasets
-for ×4 hyperspectral sharpening. MLP focuses on representation learning;
-KAN emphasises function approximation. MLP-KAN unifies both,
-achieving consistently higher PSNR across all datasets.
-</em>
-</div>
-
----
 
 ## Results
 
@@ -193,32 +158,7 @@ SMLP-KAN preserves fine spatial structure and spectral fidelity better than all 
 </em>
 </div>
 
-<br>
 
-<div align="center">
-<img src="fig/bandwise_psnr.png" width="650"/>
-<br>
-<em>
-Band-wise PSNR for HSI denoising (σ = 0.1) on PaviaC (102 bands).
-SMLP-KAN maintains consistently high PSNR across all spectral bands.
-</em>
-</div>
-
-<br>
-
-| Method | Botswana | Chikusei | PaviaC | PaviaU | WDC |
-|---|:-:|:-:|:-:|:-:|:-:|
-| GPPNN | 28.75 | 24.46 | 28.33 | 31.45 | 25.24 |
-| PLRDiff | 29.47 | 28.95 | 31.11 | 32.41 | 23.27 |
-| **SMLP-KAN** | **31.68** | **30.01** | **31.30** | **32.61** | **26.50** |
-
-### HSI Inpainting (masking rate 0.05, PSNR dB ↑)
-
-| Method | Botswana | Chikusei | PaviaC | PaviaU | WDC |
-|---|:-:|:-:|:-:|:-:|:-:|
-| DMLD-Net | 30.33 | 28.59 | 29.50 | 30.43 | 22.44 |
-| PLRDiff | 27.11 | 29.82 | 30.77 | 31.93 | 12.73 |
-| **SMLP-KAN** | **30.97** | **30.41** | **30.80** | **31.55** | **28.13** |
 
 ### Real-world Evaluation
 
@@ -233,42 +173,6 @@ relationships across all 166 bands.
 </em>
 </div>
 
-### Parameter Efficiency
-
-| Method | Parameters | FLOPs / step |
-|---|:-:|:-:|
-| HIR-Diff | 391.05 M | — |
-| PLRDiff | 391.95 M | — |
-| **SMLP-KAN** | **9.5 M** | see paper |
-
-SMLP-KAN achieves state-of-the-art performance with **~41× fewer parameters** than competing diffusion-based methods.
-
----
-
-## Ablation Study
-
-### Effect of RHAG Components (HSI Inpainting, masking rate 0.05)
-
-| PSAB | CAAB | Botswana | Chikusei | PaviaU |
-|:-:|:-:|:-:|:-:|:-:|
-| ✗ | ✗ | 26.02 | 29.35 | 25.37 |
-| ✓ | ✗ | 28.51 | 29.69 | 29.98 |
-| ✗ | ✓ | 28.41 | 29.65 | 29.57 |
-| ✓ | ✓ | **30.97** | **30.41** | **31.55** |
-
-Both PSAB and CAAB provide complementary gains; their combination consistently yields the best results.
-
-### Regularisation Parameters λ and γ
-
-<div align="center">
-<img src="fig/lambda_gamma.png" width="600"/>
-<br>
-<em>
-PSNR heatmap under varying λ and γ for HSI inpainting (masking rate 0.05) on Botswana.
-Peak performance concentrates in a specific (λ, γ) region.
-Excessively large or small values lead to consistent performance degradation.
-</em>
-</div>
 
 ---
 
